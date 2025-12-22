@@ -1,0 +1,15 @@
+
+bot:
+  token: 8554086488:AAGoOfE3eBuoM7O-S-ItzgHru7iYUsLFO2k
+  username: helper_vvbot
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bot_db
+    username: postgres
+    password: admin
+  jpa:
+    hibernate:
+      ddl-auto: update
+  application:
+    name: support-bot
