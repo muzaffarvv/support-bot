@@ -1,7 +1,7 @@
 
 bot:
-  token: 8554086488:AAGoOfE3eBuoM7O-S-ItzgHru7iYUsLFO2k
-  username: helper_vvbot
+  token: ####-####-####-####-####
+  username: ####-####
 
 spring:
   datasource:
