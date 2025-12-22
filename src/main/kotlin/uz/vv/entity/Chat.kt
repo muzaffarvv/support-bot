@@ -9,7 +9,10 @@ import uz.vv.enum.ChatStatus
 data class Chat(
 
     @Column(nullable = false)
-    var chatTgId: Long,
+    var clientChatId: Long,
+
+    @Column
+    var supportChatId: Long? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id", nullable = false)
