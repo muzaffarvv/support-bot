@@ -2,8 +2,6 @@ package uz.vv.base
 
 import jakarta.persistence.*
 import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @MappedSuperclass
 abstract class BaseEntity {
@@ -12,23 +10,23 @@ abstract class BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
 
-    var createdAt: Long = System.currentTimeMillis()
+    @Column(nullable = false, updatable = false)
+    lateinit var createdAt: Instant
 
-    var updatedAt: Long? = null
+    @Column
+    var updatedAt: Instant? = null
 
+    @Column(nullable = false)
     var deleted: Boolean = false
 
-    fun getCreatedAtUTCString(): String = createdAt.toUTCString()
+    @PrePersist
+    fun onCreate() {
+        createdAt = Instant.now()
+    }
 
-    fun getUpdatedAtUTCString(): String? = updatedAt?.toUTCString()
-
-    private fun Long.toUTCString(pattern: String = "yyyy-MM-dd HH:mm:ss"): String {
-        val formatter = DateTimeFormatter.ofPattern(pattern)
-        return Instant.ofEpochMilli(this).atZone(ZoneId.of("UTC")).format(formatter)
+    @PreUpdate
+    fun onUpdate() {
+        updatedAt = Instant.now()
     }
 }
 
-/**
- * System.currentTimeMillis() millisekundga
- * Instant.now().toEpochMilli() → millisekunddan UTC qaytaradi.
- */

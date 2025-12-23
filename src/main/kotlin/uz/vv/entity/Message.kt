@@ -3,27 +3,32 @@ package uz.vv.entity
 import jakarta.persistence.*
 import uz.vv.base.BaseEntity
 import uz.vv.enum.MessageType
-import uz.vv.enum.SenderType
 
 @Entity
-@Table(name = "messages")
+@Table(
+    name = "messages",
+    uniqueConstraints = [
+        UniqueConstraint(columnNames = ["chat_id", "telegram_msg_id"])
+    ]
+)
 data class Message(
 
-    @Column(nullable = false, unique = true)
-    var messageTgId: Int,
+    @Column(nullable = false)
+    var telegramMsgId: Long,
 
-    @Column(nullable = false, length = 225)
+    @Column(columnDefinition = "TEXT")
     var content: String? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     var type: MessageType,
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
-    var sender: SenderType,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_id", nullable = false)
+    var sender: User,
 
-    @Column(nullable = false)
-    var chatId: Long
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(nullable = false)
+    var chat: Chat
 
-) : BaseEntity() {}
+) : BaseEntity()

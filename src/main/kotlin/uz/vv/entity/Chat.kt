@@ -3,16 +3,11 @@ package uz.vv.entity
 import jakarta.persistence.*
 import uz.vv.base.BaseEntity
 import uz.vv.enum.ChatStatus
+import java.time.Instant
 
 @Entity
 @Table(name = "chats")
 data class Chat(
-
-    @Column(nullable = false)
-    var clientChatId: Long,
-
-    @Column
-    var supportChatId: Long? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id", nullable = false)
@@ -28,8 +23,9 @@ data class Chat(
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "language_id", nullable = false)
-    var language: Language
+    var language: Language,
+
+    @Column
+    var closedAt: Instant? = null
 
 ) : BaseEntity()
-
-

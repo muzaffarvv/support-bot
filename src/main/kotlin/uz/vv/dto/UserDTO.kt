@@ -1,21 +1,44 @@
 package uz.vv.dto
 
 import uz.vv.base.BaseDTO
-import uz.vv.entity.Language
-import uz.vv.entity.Role
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Pattern
+import jakarta.validation.constraints.Positive
+import jakarta.validation.constraints.Size
 
 data class UserCreateDTO(
+
+    @field:NotNull(message = "telegramId required")
+    @field:Positive(message = "telegramId must be positive")
     var telegramId: Long,
+
+    @field:NotBlank(message = "firstName required")
+    @field:Size(max = 72, message = "firstName must not exceed 72 characters")
     var firstName: String,
+
+    @field:Size(max = 60, message = "lastName must not exceed 60 characters")
     var lastName: String?,
+
+    @field:NotBlank(message = "phoneNumber required")
+    @field:Pattern(
+        regexp = "^\\+?[0-9]{9,15}$",
+        message = "phoneNumber format invalid"
+    )
     var phoneNumber: String
 )
 
 data class UserUpdateDTO(
+
+    @field:Size(max = 72, message = "firstName must not exceed 72 characters")
     var firstName: String?,
+
+    @field:Size(max = 60, message = "lastName must not exceed 60 characters")
     var lastName: String?,
-    var languages: MutableSet<LanguageDTO>?
+
+    var languageIds: MutableSet<@Positive Long>?
 )
+
 
 data class UserResponseDTO(
     var telegramId: Long,
@@ -25,23 +48,3 @@ data class UserResponseDTO(
     var roles: MutableSet<RoleDTO>,
     var languages: MutableSet<LanguageDTO>
 ) : BaseDTO()
-
-data class RoleDTO(
-    var code: String,
-    var name: String
-) {
-    fun toDTO(role: Role) = RoleDTO(
-            role.code,
-            role.name
-    )
-}
-
-data class LanguageDTO(
-    var code: String,
-    var name: String
-) {
-    fun toDTO(language: Language) = LanguageDTO(
-        language.code,
-        language.name
-    )
-}
