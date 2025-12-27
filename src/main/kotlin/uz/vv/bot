@@ -1,0 +1,27 @@
+client
+/start -> share contact -> save info -> choose languages inline btn -> save lang ->
+       -> contact support and sittings keyboard btn
+       if(contact support) -> create chat(pending) -> client.lang == support.lang ->
+       -> pausa chat and end chat keyboard btn
+          if(pausa chat) -> ChatStatus.PAUSA
+          if(end chat) ->  ChatStatus.CLOSED save chat info and messages
+       if(sittings) -> change lang
+
+admin (postman) REST API
+Assigns a user as support
+show stats -> {show clients and supports, chat info, messages info}
+getById and blah blah
+
+support
+First, the support admin has to assign it.
+request is sent to the user (Do you agree to become support?) inline btn
+if(reject) -> skip (does not change user)
+
+if(accept) -> (Choose the languages you know) inline btn -> save changes ->
+           -> contact with clients and sittings keyboard btn
+           if(contact with clients) -> get client_ids ORDER BY created_at(Chat.Status.PENDING) DESC limit 1 ->
+           -> pausa chat and end chat keyboard btn
+                     if(pausa chat) -> ChatStatus.PAUSA
+                     if(end chat) ->  ChatStatus.CLOSED save chat info and messages
+                  if(sittings) -> change lang
+

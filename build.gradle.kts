@@ -32,6 +32,8 @@ dependencies {
 
     implementation("org.springframework.boot:spring-boot-starter-validation")
 
+    implementation("org.springframework.boot:spring-boot-starter-web")
+
     implementation("org.telegram:telegrambots-spring-boot-starter:6.8.0")
 
     implementation ("com.fasterxml.jackson.core:jackson-databind:2.17.0")

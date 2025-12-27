@@ -13,7 +13,7 @@ data class Role(
     @Column(nullable = false, length = 50)
     var name: String,
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     var permissions: MutableSet<Permission> = HashSet()
 
 ): BaseEntity() {}

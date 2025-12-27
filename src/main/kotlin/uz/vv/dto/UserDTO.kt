@@ -30,15 +30,15 @@ data class UserCreateDTO(
 
 data class UserUpdateDTO(
 
-    @field:Size(max = 72, message = "firstName must not exceed 72 characters")
+    @field:Size(min = 1, max = 72, message = "firstName must not exceed 72 characters")
     var firstName: String?,
 
-    @field:Size(max = 60, message = "lastName must not exceed 60 characters")
+    @field:Size(min = 1, max = 60, message = "lastName must not exceed 60 characters")
+    @field:NotBlank(message = "lastName required")
     var lastName: String?,
 
     var languageIds: MutableSet<@Positive Long>?
 )
-
 
 data class UserResponseDTO(
     var telegramId: Long,
@@ -48,3 +48,19 @@ data class UserResponseDTO(
     var roles: MutableSet<RoleDTO>,
     var languages: MutableSet<LanguageDTO>
 ) : BaseDTO()
+
+data class AdminLoginDTO(
+    @field:NotNull(message = "Telegram ID must not be null")
+    var telegramId: Long,
+
+    @field:NotBlank(message = "First name must not be blank")
+    @field:Size( min = 3, max = 10, message = "First name must be at most 50 characters")
+    var firstName: String,
+
+    @field:NotBlank(message = "Phone number must not be blank")
+    @field:Pattern(
+        regexp = "\\+998\\d{9}",
+        message = "Phone number must be valid and start with +998"
+    )
+    var phoneNumber: String
+)
