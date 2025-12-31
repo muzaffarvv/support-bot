@@ -37,14 +37,6 @@ class ChatActionHandler(
                         otherUser.telegramId,
                         "⏸️ Suhbat to'xtatildi."
                     )
-
-                    // Qarama-qarshi menyu yuborish (PAUSED -> RESUME)
-                    val isSupport = otherUser.roles.any { role -> role.code == "SUPPORT" }
-                    if (isSupport) {
-                        bot.sendSupportMenu(otherUser.telegramId, "Support menyusi (Suhbat pauzada):")
-                    } else {
-                        bot.sendClientMenu(otherUser.telegramId, "Asosiy menyu (Suhbat pauzada):")
-                    }
                 }
 
                 // O'ziga chat menyusini RESUME ga o'zgartirish

@@ -11,67 +11,83 @@ class SupportHandler(
     private val chatService: ChatService,
     private val langRepo: LanguageRepo // Yangi servis
 ) {
+
     fun handleContactClients(chatId: Long, telegramUserId: Long, bot: BotExecutor) {
         try {
-            // 1. Support userni topish
-            val support = userService.findByTelegramId(telegramUserId)
-                ?: run {
-                    bot.sendSimpleMessage(chatId, "User topilmadi")
-                    return
-                }
+            val user = userService.findByTelegramId(telegramUserId)
+                ?: throw Exception("User not found")
 
-            // 2. Active chat borligini tekshirish
-            if (chatService.getActiveChatsByUser(support.id!!).isNotEmpty()) {
-                bot.sendSimpleMessage(chatId, "ℹ️ Sizda allaqachon faol chat mavjud")
+            // Avval active chat bor yoki yo'qligini tekshirish
+            val existingActiveChats = chatService.getActiveChatsByUser(user.id!!)
+            if (existingActiveChats.isNotEmpty()) {
+                bot.sendSimpleMessage(chatId, "ℹ️ Sizda allaqachon faol suhbat mavjud!")
                 bot.sendChatMenu(chatId)
                 return
             }
 
-            // 3. Umuman pending chat bormi?
+            // Support'ning tillarini olish
+            val supportLanguages = user.languages.map { it.code }.toSet()
+
+            // User'ning tillari bo'yicha pending chatlarni filtrlash
             val pendingChats = chatService.getPendingChats()
+                .filter { chat ->
+                    // Chat tili support'ning tillaridan biriga mos kelishi kerak
+                    supportLanguages.contains(chat.languageDTO.code)
+                }
+
             if (pendingChats.isEmpty()) {
-                bot.sendSimpleMessage(chatId, "📭 Hozircha mijozlar yo‘q")
+                bot.sendSimpleMessage(chatId, "Sizning tillaringizga mos mijozlar hozircha yo'q.")
+                // Qaysi tillarda mijozlar borligini ko'rsatish
+                val availableChats = chatService.getPendingChats()
+                if (availableChats.isNotEmpty()) {
+                    val availableLangs = availableChats
+                        .map { it.languageDTO.name }
+                        .distinct()
+                        .joinToString(", ")
+                    bot.sendSimpleMessage(chatId, "📋 Mavjud mijozlar tillari: $availableLangs")
+                }
                 return
             }
 
-            // 4. Eng eski pending chatni olish
-            val pendingChat = pendingChats.minByOrNull { it.createdAt!! }
-                ?: run {
-                    bot.sendSimpleMessage(chatId, "Xatolik: pending chat topilmadi")
-                    return
-                }
+            // Eng uzoq kutgan chatni tanlash
+            val firstChat = pendingChats.minByOrNull { it.createdAt!! }!!
 
-            // 5. Til mosligini tekshirish
-            val supportLangs = support.languages.map { it.code }.toSet()
-            if (pendingChat.languageDTO.code !in supportLangs) {
-                bot.sendSimpleMessage(
-                    chatId,
-                    "❌ Bu chat tili sizga mos emas: ${pendingChat.languageDTO.name}"
-                )
+            // Til mosligini qayta tekshirish
+            val chat = chatService.getEntityById(firstChat.id!!)
+            val chatLanguage = chat!!.language
+            val userEntity = userService.getEntityById(user.id!!)
+
+            if (!userEntity.languages.any { it.code == chatLanguage.code }) {
+                bot.sendSimpleMessage(chatId, "❌ Siz bu tilni bilmaysiz. Chat tili: ${chatLanguage.name}")
                 bot.sendLanguageSelection(chatId)
                 return
             }
 
-            // 6. Chatni active qilish
-            chatService.assignSupport(pendingChat.id!!, support.id!!)
+            // Chatni active qilish
+            chatService.assignSupport(firstChat.id!!, user.id!!)
 
-            bot.sendSimpleMessage(chatId, "✅ Mijoz bilan bog‘landingiz")
+            bot.sendSimpleMessage(chatId, "✅ Mijoz bilan bog'landingiz!")
             bot.sendChatMenu(chatId)
 
-            // 7. Clientga xabar berish
-            val client = userService.getEntityById(pendingChat.clientId)
+            // Client'ga xabar yuborish
+            val client = userService.getEntityById(firstChat.clientId)
             bot.sendSimpleMessage(
                 client.telegramId,
-                "✅ Support topildi. Suhbat boshlandi"
+                "✅ Support topildi! Suhbat boshlanmoqda..."
             )
             bot.sendChatMenu(client.telegramId)
 
+        } catch (e: IllegalStateException) {
+            if (e.message?.contains("Support language must be the same") == true) {
+                bot.sendSimpleMessage(chatId, "❌ Til mos kelmadi. Iltimos, boshqa chatni tanlang.")
+            } else {
+                bot.sendSimpleMessage(chatId, "Xatolik: ${e.message}")
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            bot.sendSimpleMessage(chatId, "❌ Xatolik: ${e.message}")
+            bot.sendSimpleMessage(chatId, "Xatolik: ${e.message}")
         }
     }
-
 
     fun handleSettings(chatId: Long, telegramUserId: Long, bot: BotExecutor) {
         bot.sendLanguageSelection(chatId)
