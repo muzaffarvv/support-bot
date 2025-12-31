@@ -25,3 +25,5 @@ if(accept) -> (Choose the languages you know) inline btn -> save changes ->
                      if(end chat) ->  ChatStatus.CLOSED save chat info and messages
                   if(sittings) -> change lang
 
+//TODO     SUPPORTni languagesini to'g'rilash
+//TODO     Testlash

@@ -49,7 +49,7 @@ abstract class BaseServiceImpl<
         }
     }
 
-    protected fun getEntityById(id: Long): E =
+     fun getEntityById(id: Long): E =
         repository.findByIdAndDeletedFalse(id) // not deleted
             ?: throw DataNotFoundException("${getEntityName()} with id=$id not found")
 }

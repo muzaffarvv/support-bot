@@ -19,10 +19,10 @@ data class User(
     @Column(nullable = false, unique = true)
     var phoneNumber: String,
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     var roles: MutableSet<Role> = HashSet(),
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     var languages: MutableSet<Language> = HashSet()
 
 ) : BaseEntity()

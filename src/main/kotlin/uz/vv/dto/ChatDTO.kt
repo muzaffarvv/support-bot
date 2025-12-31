@@ -5,6 +5,8 @@ import uz.vv.enum.ChatStatus
 import java.time.Instant
 import jakarta.validation.constraints.Positive
 
+
+
 data class ChatUpdateDTO(
     var status: ChatStatus? = null,
     @field:Positive(message = "supportId must be positive")

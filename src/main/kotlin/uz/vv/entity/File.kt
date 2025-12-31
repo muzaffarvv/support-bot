@@ -21,7 +21,7 @@ class File(
     @Column(name = "type", nullable = false, length = 10)
     var type: MessageType = MessageType.DOCUMENT,  // Photo / Video / Document / Sticker ...
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     var message: Message
 
 ) : BaseEntity()

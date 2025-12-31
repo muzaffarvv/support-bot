@@ -13,4 +13,20 @@ interface UserRepo : BaseRepo<User> {
 
     @Query("SELECT u FROM User u WHERE u.deleted = false")
     override fun findAllNotDeleted(): List<User>
+
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.code = :roleCode AND u.deleted = false")
+    fun findByRoleCode(roleCode: String): List<User>
+
+    @Query("SELECT u FROM User u JOIN u.languages l WHERE l.id = :languageId AND u.deleted = false")
+    fun findByLanguageId(languageId: Long): List<User>
+
+    @Query("""
+        SELECT u FROM User u 
+        JOIN u.roles r 
+        JOIN u.languages l 
+        WHERE r.code = :roleCode 
+        AND l.id = :languageId 
+        AND u.deleted = false
+    """)
+    fun findSupportsByLanguage(roleCode: String, languageId: Long): List<User>
 }

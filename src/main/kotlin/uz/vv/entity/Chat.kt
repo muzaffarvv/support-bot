@@ -9,11 +9,11 @@ import java.time.Instant
 @Table(name = "chats")
 data class Chat(
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "client_id", nullable = false)
     var client: User,
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "support_id")
     var support: User? = null, // nullable — hali tayinlanmagan bo'lishi mumkin)
 
@@ -21,7 +21,7 @@ data class Chat(
     @Column(nullable = false)
     var status: ChatStatus = ChatStatus.PENDING,
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "language_id", nullable = false)
     var language: Language,
 
