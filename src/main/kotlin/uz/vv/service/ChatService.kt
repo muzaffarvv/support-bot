@@ -6,7 +6,7 @@ import uz.vv.dto.ChatResponseDTO
 import uz.vv.dto.ChatUpdateDTO
 import uz.vv.entity.Chat
 import uz.vv.enum.ChatStatus
-import uz.vv.exception.DataNotFoundException
+import uz.vv.exception.*
 import uz.vv.mapper.ChatMapper
 import uz.vv.repo.ChatRepo
 import uz.vv.repo.LanguageRepo
@@ -42,9 +42,8 @@ class ChatServiceImpl(
     override fun create(clientId: Long): ChatResponseDTO {
         val client = userService.getEntityById(clientId)
 
-        // Client birinchi tilini olish
         val language = client.languages.firstOrNull()
-            ?: throw DataNotFoundException("Client has no languages set")
+            ?: throw LanguageNotFoundException("Client uchun til tanlanmagan")
 
         val chat = Chat(
             client = client,
@@ -60,7 +59,7 @@ class ChatServiceImpl(
     @Transactional(readOnly = true)
     override fun getById(id: Long): ChatResponseDTO {
         val chat = chatRepo.findByIdAndDeletedFalse(id)
-            ?: throw DataNotFoundException("Chat with id=$id not found")
+            ?: throw ChatNotFoundException("Chat ID: $id topilmadi")
         return chatMapper.toDTO(chat)
     }
 
@@ -72,7 +71,7 @@ class ChatServiceImpl(
     @Transactional
     override fun update(id: Long, dto: ChatUpdateDTO): ChatResponseDTO {
         val chat = chatRepo.findByIdAndDeletedFalse(id)
-            ?: throw DataNotFoundException("Chat with id=$id not found")
+            ?: throw ChatNotFoundException("Chat ID: $id topilmadi")
 
         dto.status?.let { chat.status = it }
         dto.supportId?.let {
@@ -87,13 +86,20 @@ class ChatServiceImpl(
     @Transactional
     override fun assignSupport(chatId: Long, supportId: Long): ChatResponseDTO {
         val chat = chatRepo.findByIdAndDeletedFalse(chatId)
-            ?: throw DataNotFoundException("Chat with id=$chatId not found")
+            ?: throw ChatNotFoundException("Chat ID: $chatId topilmadi")
 
         val support = userService.getEntityById(supportId)
 
-        if (chat.language.code != support.languages.firstOrNull()?.code) {
-            throw IllegalStateException("Support language must be the same as client's first language")
-        } // todo IllegalStateException
+        // Chat tilini supportning barcha tillari bilan tekshirish
+        val supportSpeaksChatLanguage = support.languages.any { it.code == chat.language.code }
+
+        if (!supportSpeaksChatLanguage) {
+            throw LanguageMismatchException(
+                "Support tili client tili bilan mos kelmadi. " +
+                        "Client tili: ${chat.language.name}, " +
+                        "Support tillari: ${support.languages.joinToString { it.name }}"
+            )
+        }
 
         chat.support = support
         chat.status = ChatStatus.ACTIVE
@@ -102,10 +108,15 @@ class ChatServiceImpl(
         return chatMapper.toDTO(updated)
     }
 
+
     @Transactional
     override fun pauseChat(chatId: Long): ChatResponseDTO {
         val chat = chatRepo.findByIdAndDeletedFalse(chatId)
-            ?: throw DataNotFoundException("Chat with id=$chatId not found")
+            ?: throw ChatNotFoundException("Chat ID: $chatId topilmadi")
+
+        if (chat.status != ChatStatus.ACTIVE) {
+            throw ChatNotActiveException("Chat faol holatda emas")
+        }
 
         chat.status = ChatStatus.PAUSED
 
@@ -116,7 +127,7 @@ class ChatServiceImpl(
     @Transactional
     override fun closeChat(chatId: Long): ChatResponseDTO {
         val chat = chatRepo.findByIdAndDeletedFalse(chatId)
-            ?: throw DataNotFoundException("Chat with id=$chatId not found")
+            ?: throw ChatNotFoundException("Chat ID: $chatId topilmadi")
 
         chat.status = ChatStatus.CLOSED
         chat.closedAt = Instant.now()
@@ -152,7 +163,6 @@ class ChatServiceImpl(
 
     @Transactional(readOnly = true)
     override fun findMatchingSupport(languageId: Long): Long? {
-        // Pending chatlarni language bo'yicha olish
         val pendingChats = chatRepo.findByStatus(ChatStatus.PENDING)
             .filter { it.language.id == languageId }
             .sortedBy { it.createdAt }
@@ -163,10 +173,10 @@ class ChatServiceImpl(
     @Transactional
     override fun resumeChat(chatId: Long): ChatResponseDTO {
         val chat = chatRepo.findByIdAndDeletedFalse(chatId)
-            ?: throw DataNotFoundException("Chat with id=$chatId not found")
+            ?: throw ChatNotFoundException("Chat ID: $chatId topilmadi")
 
         if (chat.status != ChatStatus.PAUSED) {
-            throw IllegalStateException("Chat must be in PAUSED status to resume")
+            throw ChatNotPausedException("Chat to'xtatilgan holatda emas")
         }
 
         chat.status = ChatStatus.ACTIVE
@@ -192,5 +202,4 @@ class ChatServiceImpl(
                         (it.status == ChatStatus.ACTIVE || it.status == ChatStatus.PAUSED)
             }
     }
-
 }

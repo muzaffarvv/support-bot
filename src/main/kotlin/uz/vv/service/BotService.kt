@@ -3,13 +3,10 @@ package uz.vv.service
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
-import org.telegram.telegrambots.meta.api.methods.GetFile
+import org.telegram.telegrambots.meta.api.methods.CopyMessage
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
-import org.telegram.telegrambots.meta.api.methods.send.SendDocument
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage
-import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
-import org.telegram.telegrambots.meta.api.methods.send.SendVideo
-import org.telegram.telegrambots.meta.api.methods.send.SendVoice
+import org.telegram.telegrambots.meta.api.methods.send.*
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand
@@ -26,8 +23,10 @@ import uz.vv.service.handler.*
 
 @Service
 class BotService(
-    @Value("\${bot.token}") private val botTokenStr: String,
-    @Value("\${bot.username}") private val botUsernameStr: String,
+    @Value("\${bot.token}")
+    private val botTokenStr: String,
+    @Value("\${bot.username}")
+    private val botUsernameStr: String,
     private val messageHandler: MessageHandler,
     private val callbackHandler: CallbackHandler,
     private val clientHandler: ClientHandler,
@@ -70,22 +69,72 @@ class BotService(
             message.hasVideo() -> handleFileMessage(chatId, telegramUserId, message, MessageType.VIDEO)
             message.hasVoice() -> handleFileMessage(chatId, telegramUserId, message, MessageType.VOICE)
             message.hasDocument() -> handleFileMessage(chatId, telegramUserId, message, MessageType.DOCUMENT)
+            message.hasSticker() -> handleFileMessage(chatId, telegramUserId, message, MessageType.STICKER)
+            message.hasLocation() -> handleLocationMessage(chatId, telegramUserId, message)
+            message.hasVideoNote() -> handleVideoNoteMessage(chatId, telegramUserId, message)
         }
     }
 
-    private fun handleFileMessage(chatId: Long, telegramUserId: Long, message: org.telegram.telegrambots.meta.api.objects.Message, fileType: MessageType) {
+    private fun handleLocationMessage(
+        chatId: Long,
+        telegramUserId: Long,
+        message: org.telegram.telegrambots.meta.api.objects.Message
+    ) {
         try {
-            // Telegram fayl ID sini olish
+            val location = message.location
+            if (location != null) {
+                messageHandler.handleLocationMessage(
+                    chatId = chatId,
+                    telegramUserId = telegramUserId,
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    bot = this
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            sendSimpleMessage(chatId, "Location yuborishda xatolik: ${e.message}")
+        }
+    }
+
+    private fun handleVideoNoteMessage(
+        chatId: Long,
+        telegramUserId: Long,
+        message: org.telegram.telegrambots.meta.api.objects.Message
+    ) {
+        try {
+            val videoNote = message.videoNote
+            if (videoNote != null) {
+                messageHandler.handleVideoNoteMessage(
+                    chatId = chatId,
+                    telegramUserId = telegramUserId,
+                    fileId = videoNote.fileId,
+                    bot = this
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            sendSimpleMessage(chatId, "Video note yuborishda xatolik: ${e.message}")
+        }
+    }
+
+    private fun handleFileMessage(
+        chatId: Long,
+        telegramUserId: Long,
+        message: org.telegram.telegrambots.meta.api.objects.Message,
+        fileType: MessageType
+    ) {
+        try {
             val fileId = when (fileType) {
                 MessageType.PHOTO -> message.photo.last().fileId
                 MessageType.VIDEO -> message.video.fileId
                 MessageType.VOICE -> message.voice.fileId
                 MessageType.DOCUMENT -> message.document.fileId
+                MessageType.STICKER -> message.sticker.fileId
                 else -> null
             }
 
             if (fileId != null) {
-
                 messageHandler.handleFileMessage(
                     chatId = chatId,
                     telegramUserId = telegramUserId,
@@ -94,7 +143,6 @@ class BotService(
                     caption = message.caption,
                     bot = this
                 )
-
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -105,13 +153,18 @@ class BotService(
     private fun handleCallbackQuery(update: Update) {
         val callbackQuery = update.callbackQuery
         val chatId = callbackQuery.message.chatId
+        val messageId = callbackQuery.message.messageId
         val telegramUserId = callbackQuery.from.id
         val data = callbackQuery.data
 
         when {
             data.startsWith("lang_") -> {
                 val langCode = data.substringAfter("lang_")
-                callbackHandler.handleLanguageSelection(chatId, telegramUserId, langCode, this)
+                // messageId ni uzatamiz
+                callbackHandler.handleLanguageSelection(chatId, telegramUserId, langCode, messageId, this)
+            }
+            data == "save_languages" -> {
+                callbackHandler.handleSaveLanguages(chatId, telegramUserId, this)
             }
             data == "accept_support" -> callbackHandler.handleAcceptSupport(chatId, telegramUserId, this)
             data == "reject_support" -> callbackHandler.handleRejectSupport(chatId, telegramUserId, this)
@@ -179,20 +232,81 @@ class BotService(
         }
     }
 
-    override fun removeReplyKeyboard(chatId: Long) {
+    override fun sendMultiLanguageSelection(chatId: Long, selectedLanguages: MutableSet<Long>) {
         val message = SendMessage()
         message.chatId = chatId.toString()
-        message.text = " "
+        message.text = """
+            Tillarni tanlang (bir nechta tanlash mumkin):
+            Выберите языки (можно выбрать несколько):
+            Choose languages (multiple selection allowed):
+        """.trimIndent()
 
-        val removeKeyboard = ReplyKeyboardRemove()
-        removeKeyboard.removeKeyboard = true
-        message.replyMarkup = removeKeyboard
+        val allLanguages = userService.getAllLangs()
+        val markup = InlineKeyboardMarkup()
+
+        val rows = allLanguages.map { lang ->
+            val isSelected = selectedLanguages.contains(lang.id)
+            val emoji = if (isSelected) "✅" else ""
+            val buttonText = "$emoji ${lang.name}"
+
+            listOf(InlineKeyboardButton(buttonText).apply { callbackData = "lang_${lang.code}" })
+        }
+
+        markup.keyboard = rows
+        message.replyMarkup = markup
 
         try {
             execute(message)
         } catch (e: TelegramApiException) {
             e.printStackTrace()
         }
+    }
+
+    override fun sendMultiLanguageSelectionWithSave(chatId: Long, selectedLanguages: MutableSet<Long>) {
+        val message = SendMessage()
+        message.chatId = chatId.toString()
+
+        val selectedLangNames = userService.getAllLangs()
+            .filter { selectedLanguages.contains(it.id) }
+            .joinToString(", ") { it.name }
+
+        message.text = "📋 Tanlangan tillar: $selectedLangNames\n\nQo'shimcha til tanlang yoki saqlang:"
+
+        val allLanguages = userService.getAllLangs()
+        val markup = InlineKeyboardMarkup()
+
+        val langRows = allLanguages.map { lang ->
+            val isSelected = selectedLanguages.contains(lang.id)
+            val emoji = if (isSelected) "✅" else ""
+            val buttonText = "$emoji ${lang.name}"
+
+            listOf(InlineKeyboardButton(buttonText).apply { callbackData = "lang_${lang.code}" })
+        }
+
+        val saveButton = listOf(
+            InlineKeyboardButton("💾 Saqlash / Save").apply { callbackData = "save_languages" }
+        )
+
+        markup.keyboard = langRows + listOf(saveButton)
+        message.replyMarkup = markup
+
+        try {
+            execute(message)
+        } catch (e: TelegramApiException) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun removeReplyKeyboard(chatId: Long) {
+        val message = SendMessage()
+        message.chatId = chatId.toString()
+        message.text = "⬇️"
+
+        val removeKeyboard = ReplyKeyboardRemove()
+        removeKeyboard.removeKeyboard = true
+        message.replyMarkup = removeKeyboard
+
+        execute(message)
     }
 
     override fun sendClientMenu(chatId: Long, text: String) {
@@ -311,11 +425,7 @@ class BotService(
         keyboard.resizeKeyboard = true
 
         val row1 = KeyboardRow()
-        if (isSupport) {
-            row1.add(KeyboardButton("▶️ Suhbatni davom ettirish"))
-        } else {
-            row1.add(KeyboardButton("▶️ Suhbatni davom ettirish"))
-        }
+        row1.add(KeyboardButton("▶️ Suhbatni davom ettirish"))
 
         val row2 = KeyboardRow()
         row2.add(KeyboardButton("❌ Suhbatni yakunlash"))
@@ -380,5 +490,109 @@ class BotService(
         } catch (e: TelegramApiException) {
             e.printStackTrace()
         }
+    }
+
+    override fun sendSticker(telegramId: Long, fileId: String, senderName: String) {
+        val message = SendSticker()
+        message.chatId = telegramId.toString()
+        message.sticker = InputFile(fileId)
+
+        try {
+            execute(message)
+            // Sticker yuborilganidan keyin kim yuborganini ko'rsatish
+            sendSimpleMessage(telegramId, "🎭 $senderName sticker yubordi")
+        } catch (e: TelegramApiException) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun sendLocation(
+        telegramId: Long,
+        latitude: Double,
+        longitude: Double,
+        senderName: String
+    ) {
+        val location = SendLocation().apply {
+            chatId = telegramId.toString()
+            this.latitude = latitude
+            this.longitude = longitude
+        }
+
+        try {
+            execute(location)
+            sendSimpleMessage(
+                telegramId,
+                "📍 $senderName joylashuv yubordi"
+            )
+        } catch (e: TelegramApiException) {
+            e.printStackTrace()
+        }
+    }
+
+
+    override fun sendVideoNote(
+        telegramId: Long,
+        fileId: String,
+        senderName: String
+    ) {
+        val videoNote = SendVideoNote().apply {
+            chatId = telegramId.toString()
+            videoNote = InputFile(fileId)
+        }
+
+        try {
+            execute(videoNote)
+            sendSimpleMessage(
+                telegramId,
+                "⭕️ $senderName video xabar yubordi"
+            )
+        } catch (e: TelegramApiException) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun editMultiLanguageSelection(
+        chatId: Long,
+        messageId: Int,
+        selectedLanguages: Set<Long>,
+        withSave: Boolean
+    ) {
+        val allLanguages = userService.getAllLangs()
+
+        val text = if (selectedLanguages.isEmpty()) {
+            "Tillarni tanlang (bir nechta tanlash mumkin):"
+        } else {
+            val names = allLanguages
+                .filter { selectedLanguages.contains(it.id) }
+                .joinToString(", ") { it.name }
+
+            "📋 Tanlangan tillar: $names\n\nYana tanlang yoki saqlang:"
+        }
+
+        val rows = allLanguages.map { lang ->
+            val selected = selectedLanguages.contains(lang.id)
+            val label = if (selected) "✅ ${lang.name}" else lang.name
+
+            listOf(
+                InlineKeyboardButton(label)
+                    .apply { callbackData = "lang_${lang.code}" }
+            )
+        }.toMutableList()
+
+        if (withSave) {
+            rows.add(
+                listOf(
+                    InlineKeyboardButton("💾 Saqlash")
+                        .apply { callbackData = "save_languages" }
+                )
+            )
+        }
+
+        val edit = EditMessageReplyMarkup()
+        edit.chatId = chatId.toString()
+        edit.messageId = messageId
+        edit.replyMarkup = InlineKeyboardMarkup(rows)
+
+        execute(edit)
     }
 }

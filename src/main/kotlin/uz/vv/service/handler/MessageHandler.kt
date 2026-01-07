@@ -5,7 +5,10 @@ import uz.vv.dto.MessageCreateDTO
 import uz.vv.dto.UserCreateDTO
 import uz.vv.enum.ChatStatus
 import uz.vv.enum.MessageType
+import uz.vv.exception.ChatNotFoundException
+import uz.vv.exception.ChatNotActiveException
 import uz.vv.exception.UserAlreadyExistException
+import uz.vv.exception.UserNotFoundException
 import uz.vv.service.BotExecutor
 import uz.vv.service.ChatService
 import uz.vv.service.FileService
@@ -20,23 +23,18 @@ class MessageHandler(
     private val fileService: FileService
 ) {
 
-
     fun handleStart(chatId: Long, telegramUserId: Long, bot: BotExecutor) {
         try {
             val user = userService.findByTelegramId(telegramUserId)
 
             if (user != null) {
-                // User'ning faol yoki to'xtatilgan chatlarini tekshirish
-                val userEntity = userService.getEntityById(user.id!!)
                 val activeOrPausedChats = chatService.getActiveOrPausedChatsByUser(user.id!!)
 
-                // Agar chat bor bo'lsa, uni yakunlash
                 if (activeOrPausedChats.isNotEmpty()) {
                     activeOrPausedChats.forEach { chat ->
                         chatService.closeChat(chat.id!!)
 
-                        // Ikkinchi foydalanuvchiga xabar
-                        val otherUserId = if (chat.client.id == user.id!!) {
+                        val otherUserId = if (chat.client.id == user.id) {
                             chat.support?.id
                         } else {
                             chat.client.id
@@ -61,7 +59,6 @@ class MessageHandler(
                     bot.sendSimpleMessage(chatId, "⚠️ Avvalgi suhbat(lar) yakunlandi.")
                 }
 
-                // User rolini tekshirish
                 val isSupport = user.roles.any { it.code == "SUPPORT" }
 
                 if (isSupport) {
@@ -108,11 +105,10 @@ class MessageHandler(
         }
     }
 
-
     fun handleRegularMessage(chatId: Long, telegramUserId: Long, text: String, bot: BotExecutor) {
         try {
             val user = userService.findByTelegramId(telegramUserId)
-                ?: throw Exception("User not found")
+                ?: throw UserNotFoundException("Foydalanuvchi topilmadi")
 
             val activeChats = chatService.getActiveChatsByUser(user.id!!)
 
@@ -123,13 +119,10 @@ class MessageHandler(
 
             val chat = activeChats.first()
 
-            // ✅ Chat holati tekshiruvi
             if (chat.status != ChatStatus.ACTIVE) {
-                bot.sendSimpleMessage(chatId, "⚠️ Suhbat hali boshlanmagan yoki to'xtatilgan.")
-                return
+                throw ChatNotActiveException("Suhbat hali boshlanmagan yoki to'xtatilgan")
             }
 
-            // ✅ Xabarni saqlash
             val messageDto = MessageCreateDTO(
                 messageTgId = System.currentTimeMillis(),
                 content = text,
@@ -139,14 +132,12 @@ class MessageHandler(
             )
             messageService.create(messageDto)
 
-            // ✅ Ikkinchi foydalanuvchini topish
             val otherUserId = if (chat.client.id == user.id) {
                 chat.support?.id
             } else {
                 chat.client.id
             }
 
-            // ✅ Null tekshiruvi bilan xabar yuborish
             if (otherUserId == null) {
                 bot.sendSimpleMessage(chatId, "⚠️ Ikkinchi foydalanuvchi topilmadi. Support hali ulanmagan.")
                 return
@@ -155,13 +146,16 @@ class MessageHandler(
             val otherUser = userService.getEntityById(otherUserId)
             bot.forwardMessage(otherUser.telegramId, text, user.firstName)
 
+        } catch (e: UserNotFoundException) {
+            bot.sendSimpleMessage(chatId, "❌ ${e.message}")
+        } catch (e: ChatNotActiveException) {
+            bot.sendSimpleMessage(chatId, "⚠️ ${e.message}")
         } catch (e: Exception) {
             e.printStackTrace()
             bot.sendSimpleMessage(chatId, "Xatolik: ${e.message}")
         }
     }
 
-    // Yangi: Fayllarni qayta ishlash
     fun handleFileMessage(
         chatId: Long,
         telegramUserId: Long,
@@ -172,57 +166,191 @@ class MessageHandler(
     ) {
         try {
             val user = userService.findByTelegramId(telegramUserId)
-                ?: throw Exception("User not found")
+                ?: throw UserNotFoundException("Foydalanuvchi topilmadi")
 
             val activeChats = chatService.getActiveChatsByUser(user.id!!)
 
-            if (activeChats.isNotEmpty()) {
-                val chat = activeChats.first()
-
-                val messageDto = MessageCreateDTO(
-                    messageTgId = System.currentTimeMillis(),
-                    content = caption,
-                    type = fileType,
-                    senderId = user.id!!,
-                    chatId = chat.id!!
-                )
-                // Faylni saqlash (bu yerda Telegram file download va saqlash logikasi)
-                // Haqiqiy implementatsiya Telegram file download API ga bog'liq
-
-                // Xabarni ikkinchi tomonga yuborish
-                val otherUserId = if (chat.client.id == user.id) {
-                    chat.support?.id
-                } else {
-                    chat.client.id
-                }
-
-                otherUserId?.let {
-                    val otherUser = userService.getEntityById(it)
-
-                    when (fileType) {
-                        MessageType.PHOTO ->
-                            bot.sendPhoto(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
-
-                        MessageType.VIDEO ->
-                            bot.sendVideo(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
-
-                        MessageType.VOICE ->
-                            bot.sendVoice(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
-
-                        MessageType.DOCUMENT ->
-                            bot.sendDocument(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
-
-                        else -> {bot.sendSimpleMessage(chatId, "Fayl turi noto'g'ri!")}
-                    }
-
-                }
-            } else {
-                bot.sendSimpleMessage(chatId, "Siz hozir suhbatda emassiz.")
+            if (activeChats.isEmpty()) {
+                bot.sendSimpleMessage(chatId, "❌ Siz hozir suhbatda emassiz.")
+                return
             }
+
+            val chat = activeChats.first()
+
+            if (chat.status != ChatStatus.ACTIVE) {
+                throw ChatNotActiveException("Suhbat hali boshlanmagan yoki to'xtatilgan")
+            }
+
+            // Xabarni DBga saqlash
+            val messageDto = MessageCreateDTO(
+                messageTgId = System.currentTimeMillis(),
+                content = caption ?: telegramFileId, // Faylning file_id sini saqlaymiz
+                type = fileType,
+                senderId = user.id!!,
+                chatId = chat.id!!
+            )
+            val savedMessage = messageService.create(messageDto)
+
+            // File metadata ni DBga yozish (optional - agar kerak bo'lsa)
+            // fileService ni kengaytirish kerak bo'lsa bu yerda qo'shishingiz mumkin
+
+            val otherUserId = if (chat.client.id == user.id) {
+                chat.support?.id
+            } else {
+                chat.client.id
+            }
+
+            if (otherUserId == null) {
+                bot.sendSimpleMessage(chatId, "⚠️ Ikkinchi foydalanuvchi topilmadi.")
+                return
+            }
+
+            val otherUser = userService.getEntityById(otherUserId)
+
+            // Faylni ikkinchi foydalanuvchiga yuborish
+            when (fileType) {
+                MessageType.PHOTO ->
+                    bot.sendPhoto(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
+
+                MessageType.VIDEO ->
+                    bot.sendVideo(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
+
+                MessageType.VOICE ->
+                    bot.sendVoice(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
+
+                MessageType.DOCUMENT ->
+                    bot.sendDocument(otherUser.telegramId, telegramFileId, caption ?: "", user.firstName)
+
+                MessageType.STICKER ->
+                    bot.sendSticker(otherUser.telegramId, telegramFileId, user.firstName)
+
+                else -> {
+                    bot.sendSimpleMessage(chatId, "❌ Fayl turi qo'llab-quvvatlanmaydi!")
+                }
+            }
+
+        } catch (e: UserNotFoundException) {
+            bot.sendSimpleMessage(chatId, "❌ ${e.message}")
+        } catch (e: ChatNotActiveException) {
+            bot.sendSimpleMessage(chatId, "⚠️ ${e.message}")
         } catch (e: Exception) {
             e.printStackTrace()
-            bot.sendSimpleMessage(chatId, "Xatolik: ${e.message}")
+            bot.sendSimpleMessage(chatId, "❌ Xatolik: ${e.message}")
+        }
+    }
+
+    fun handleLocationMessage(
+        chatId: Long,
+        telegramUserId: Long,
+        latitude: Double,
+        longitude: Double,
+        bot: BotExecutor
+    ) {
+        try {
+            val user = userService.findByTelegramId(telegramUserId)
+                ?: throw UserNotFoundException("Foydalanuvchi topilmadi")
+
+            val activeChats = chatService.getActiveChatsByUser(user.id!!)
+
+            if (activeChats.isEmpty()) {
+                bot.sendSimpleMessage(chatId, "❌ Siz hozir suhbatda emassiz.")
+                return
+            }
+
+            val chat = activeChats.first()
+
+            if (chat.status != ChatStatus.ACTIVE) {
+                throw ChatNotActiveException("Suhbat hali boshlanmagan yoki to'xtatilgan")
+            }
+
+            // Location xabarini DBga saqlash (agar kerak bo'lsa)
+            val messageDto = MessageCreateDTO(
+                messageTgId = System.currentTimeMillis(),
+                content = "Location: $latitude, $longitude",
+                type = MessageType.LOCATION,
+                senderId = user.id!!,
+                chatId = chat.id!!
+            )
+            messageService.create(messageDto)
+
+            val otherUserId = if (chat.client.id == user.id) {
+                chat.support?.id
+            } else {
+                chat.client.id
+            }
+
+            if (otherUserId == null) {
+                bot.sendSimpleMessage(chatId, "⚠️ Ikkinchi foydalanuvchi topilmadi.")
+                return
+            }
+
+            val otherUser = userService.getEntityById(otherUserId)
+            bot.sendLocation(otherUser.telegramId, latitude, longitude, user.firstName)
+
+        } catch (e: UserNotFoundException) {
+            bot.sendSimpleMessage(chatId, "❌ ${e.message}")
+        } catch (e: ChatNotActiveException) {
+            bot.sendSimpleMessage(chatId, "⚠️ ${e.message}")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            bot.sendSimpleMessage(chatId, "❌ Xatolik: ${e.message}")
+        }
+    }
+
+    fun handleVideoNoteMessage(
+        chatId: Long,
+        telegramUserId: Long,
+        fileId: String,
+        bot: BotExecutor
+    ) {
+        try {
+            val user = userService.findByTelegramId(telegramUserId)
+                ?: throw UserNotFoundException("Foydalanuvchi topilmadi")
+
+            val activeChats = chatService.getActiveChatsByUser(user.id!!)
+
+            if (activeChats.isEmpty()) {
+                bot.sendSimpleMessage(chatId, "❌ Siz hozir suhbatda emassiz.")
+                return
+            }
+
+            val chat = activeChats.first()
+
+            if (chat.status != ChatStatus.ACTIVE) {
+                throw ChatNotActiveException("Suhbat hali boshlanmagan yoki to'xtatilgan")
+            }
+
+            // Video note xabarini DBga saqlash
+            val messageDto = MessageCreateDTO(
+                messageTgId = System.currentTimeMillis(),
+                content = fileId,
+                type = MessageType.VIDEO_NOTE,
+                senderId = user.id!!,
+                chatId = chat.id!!
+            )
+            messageService.create(messageDto)
+
+            val otherUserId = if (chat.client.id == user.id) {
+                chat.support?.id
+            } else {
+                chat.client.id
+            }
+
+            if (otherUserId == null) {
+                bot.sendSimpleMessage(chatId, "⚠️ Ikkinchi foydalanuvchi topilmadi.")
+                return
+            }
+
+            val otherUser = userService.getEntityById(otherUserId)
+            bot.sendVideoNote(otherUser.telegramId, fileId, user.firstName)
+
+        } catch (e: UserNotFoundException) {
+            bot.sendSimpleMessage(chatId, "❌ ${e.message}")
+        } catch (e: ChatNotActiveException) {
+            bot.sendSimpleMessage(chatId, "⚠️ ${e.message}")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            bot.sendSimpleMessage(chatId, "❌ Xatolik: ${e.message}")
         }
     }
 }
-

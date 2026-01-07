@@ -3,6 +3,7 @@ package uz.vv.dto
 import uz.vv.entity.Language
 
 data class LanguageDTO(
+    var id: Long? = null,
     var code: String,
     var name: String
 ) {
@@ -10,6 +11,7 @@ data class LanguageDTO(
         fun toDTO(languages: MutableSet<Language>) =
             languages.map {
                 LanguageDTO(
+                    it.id,
                     it.code,
                     it.name
                 )

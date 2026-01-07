@@ -1,6 +1,7 @@
 package uz.vv.controller
 
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
@@ -14,6 +15,7 @@ import jakarta.validation.Valid
 
 @RestController
 @RequestMapping("/api/admin")
+@PreAuthorize("hasRole('ADMIN')")
 class AdminController(
     private val userService: UserService,
     private val chatService: ChatService,
@@ -60,7 +62,6 @@ class AdminController(
     fun requestSupportRole(@PathVariable id: Long): ResponseEntity<Map<String, String>> {
         val user = userService.getById(id)
 
-        // User'ga support bo'lish uchun so'rov yuborish
         sendSupportRequest(user.telegramId)
 
         return ResponseEntity.ok(mapOf(
@@ -219,7 +220,8 @@ class AdminController(
                 "text" to messages.count { it.type.name == "TEXT" },
                 "photo" to messages.count { it.type.name == "PHOTO" },
                 "video" to messages.count { it.type.name == "VIDEO" },
-                "document" to messages.count { it.type.name == "DOCUMENT" }
+                "document" to messages.count { it.type.name == "DOCUMENT" },
+                "sticker" to messages.count { it.type.name == "STICKER" }
             )
         )
 
@@ -232,20 +234,5 @@ class AdminController(
     fun getAllLanguages(): ResponseEntity<List<*>> {
         val languages = userService.getAllLangs()
         return ResponseEntity.ok(languages)
-    }
-}
-
-@RestController
-@RequestMapping("/api/public")
-class PublicController(
-    private val userService: UserService
-) {
-
-    @PostMapping("/login")
-    fun login(@Valid @RequestBody dto: AdminLoginDTO): ResponseEntity<UserResponseDTO> {
-        val user = userService.getAll().find { it.telegramId == dto.telegramId }
-            ?: throw Exception("User not found")
-
-        return ResponseEntity.ok(user)
     }
 }

@@ -27,7 +27,7 @@ class ChatMapper() : BaseMapper<
             clientId = entity.client.id!!,
             supportId = entity.support?.id,
             status = entity.status,
-            languageDTO = LanguageDTO(entity.language.code, entity.language.name),
+            languageDTO = LanguageDTO(entity.id, entity.language.code, entity.language.name),
             closedAt = entity.closedAt
         ).applyBase(entity)
 }

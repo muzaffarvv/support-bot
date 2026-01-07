@@ -1,14 +1,16 @@
 package uz.vv.dto
 
 import uz.vv.base.BaseDTO
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotNull
-import jakarta.validation.constraints.Pattern
-import jakarta.validation.constraints.Positive
-import jakarta.validation.constraints.Size
+import jakarta.validation.constraints.*
 
+// Login response DTO
+data class LoginResponseDTO(
+    val token: String,
+    val user: UserResponseDTO
+)
+
+// User DTOs - Updated
 data class UserCreateDTO(
-
     @field:NotNull(message = "telegramId required")
     @field:Positive(message = "telegramId must be positive")
     var telegramId: Long,
@@ -29,14 +31,13 @@ data class UserCreateDTO(
 )
 
 data class UserUpdateDTO(
-
     @field:Size(min = 1, max = 72, message = "firstName must not exceed 72 characters")
     var firstName: String?,
 
     @field:Size(min = 1, max = 60, message = "lastName must not exceed 60 characters")
-    @field:NotBlank(message = "lastName required")
     var lastName: String?,
 
+    // Support uchun ko'p til, Client uchun bitta til
     var languageIds: MutableSet<@Positive Long>?
 )
 
@@ -54,7 +55,7 @@ data class AdminLoginDTO(
     var telegramId: Long,
 
     @field:NotBlank(message = "First name must not be blank")
-    @field:Size( min = 3, max = 10, message = "First name must be at most 50 characters")
+    @field:Size(min = 3, max = 50, message = "First name must be between 3 and 50 characters")
     var firstName: String,
 
     @field:NotBlank(message = "Phone number must not be blank")

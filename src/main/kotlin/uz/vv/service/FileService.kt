@@ -23,11 +23,6 @@ class FileService(
     @Value("\${file.upload-dir:uploads}")
     private lateinit var uploadDir: String
 
-    /**
-     * SAVE multiple files
-     * Faylni diskga saqlaydi va DBga yozadi
-     * KeyName: unikal nom (12 char UUID + originalName)
-     */
     fun save(files: List<MultipartFile>, message: Message): List<File> {
         val savedFiles = mutableListOf<File>()
         if (files.isEmpty()) return savedFiles
@@ -69,10 +64,6 @@ class FileService(
         return savedFiles
     }
 
-    /**
-     * DELETE single file
-     * DBdan soft-delete qiladi va diskdan o'chiradi
-     */
     fun delete(keyName: String?) {
         if (keyName == null || keyName == "default.png") return
 
@@ -85,25 +76,14 @@ class FileService(
         }
     }
 
-    /**
-     * DELETE multiple files
-     */
     fun deleteAll(files: List<File>) {
         files.forEach { delete(it.keyName) }
     }
 
-    /**
-     * FIND files by message
-     * DBdan barcha fayllarni olib keladi
-     */
     fun findByMessageId(msgId: Long): File? {
         return fileRepo.findByMessageId(msgId)
     }
 
-    /**
-     * UPDATE file for a message
-     * Eski fayl o'chiriladi va yangi fayl qo'yiladi
-     */
     fun update(msgId: Long, newFile: MultipartFile): File {
         val message = messageRepo.findByIdAndDeletedFalse(msgId)
             ?: throw DataNotFoundException("Message with id=$msgId not found")
@@ -117,24 +97,15 @@ class FileService(
         return savedFiles.first()
     }
 
-    /**
-     * FIND by KeyName
-     */
     fun findByKeyName(keyName: String): File? {
         return fileRepo.findByKeyName(keyName)
     }
 
-    /**
-     * DELETE all files by message
-     */
     fun deleteAllByMessage(msgId: Long) {
         val file = fileRepo.findByMessageId(msgId)
         file?.let { delete(it.keyName) }
     }
 
-    /**
-     * Get file path for download
-     */
     fun getFilePath(keyName: String): String {
         return Paths.get(System.getProperty("user.home"), uploadDir, keyName).toString()
     }

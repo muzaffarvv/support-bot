@@ -9,5 +9,5 @@ enum class MessageType {
     STICKER,
     LOCATION,
     CONTACT,
-    CALLBACK
+    VIDEO_NOTE
 }

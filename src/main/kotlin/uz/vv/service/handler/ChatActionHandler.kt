@@ -1,6 +1,7 @@
 package uz.vv.service.handler
 
 import org.springframework.stereotype.Component
+import uz.vv.exception.UserNotFoundException
 import uz.vv.service.BotExecutor
 import uz.vv.service.ChatService
 import uz.vv.service.UserService
@@ -58,7 +59,7 @@ class ChatActionHandler(
     fun handleResumeChat(chatId: Long, telegramUserId: Long, bot: BotExecutor) {
         try {
             val user = userService.findByTelegramId(telegramUserId)
-                ?: throw Exception("User not found")
+                ?: throw UserNotFoundException("User not found")
 
             val pausedChats = chatService.getPausedChatsByUser(user.id!!)
 
@@ -91,7 +92,7 @@ class ChatActionHandler(
             } else {
                 bot.sendSimpleMessage(chatId, "To'xtatilgan suhbat topilmadi.")
             }
-        } catch (e: Exception) {
+        } catch (e: UserNotFoundException) {
             e.printStackTrace()
             bot.sendSimpleMessage(chatId, "Xatolik: ${e.message}")
         }
@@ -100,7 +101,7 @@ class ChatActionHandler(
     fun handleEndChat(chatId: Long, telegramUserId: Long, bot: BotExecutor) {
         try {
             val user = userService.findByTelegramId(telegramUserId)
-                ?: throw Exception("User not found")
+                ?: throw UserNotFoundException("User not found")
 
             val activeChats = chatService.getActiveChatsByUser(user.id!!)
             val pausedChats = chatService.getPausedChatsByUser(user.id!!)
@@ -145,7 +146,7 @@ class ChatActionHandler(
             } else {
                 bot.sendSimpleMessage(chatId, "Suhbat topilmadi.")
             }
-        } catch (e: Exception) {
+        } catch (e: UserNotFoundException) {
             e.printStackTrace()
             bot.sendSimpleMessage(chatId, "Xatolik: ${e.message}")
         }

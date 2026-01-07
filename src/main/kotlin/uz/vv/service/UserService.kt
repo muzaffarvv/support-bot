@@ -11,8 +11,7 @@ import uz.vv.dto.UserResponseDTO
 import uz.vv.dto.UserUpdateDTO
 import uz.vv.entity.Language
 import uz.vv.entity.User
-import uz.vv.exception.UserNotFoundException
-import uz.vv.exception.UserAlreadyExistException
+import uz.vv.exception.*
 import uz.vv.mapper.UserMapper
 import uz.vv.repo.LanguageRepo
 import uz.vv.repo.RoleRepo
@@ -43,10 +42,10 @@ class UserService(
     fun assignToSupport(id: Long) {
         val user = getEntityById(id)
         val supportRole = roleRepo.findByCodeAndDeletedFalse(support)
-            ?: throw IllegalStateException("SUPPORT role not found") // todo IllegalStateException
+            ?: throw InvalidUserRoleException("SUPPORT roli topilmadi")
 
         if (user.roles.any { it.id == supportRole.id }) {
-            throw IllegalStateException("USER_ALREADY_SUPPORT") // todo IllegalStateException
+            throw UserAlreadySupportException("Foydalanuvchi allaqachon support hisoblanadi")
         }
 
         user.roles.clear()
@@ -55,12 +54,14 @@ class UserService(
         repository.saveAndRefresh(user)
     }
 
-
     override fun create(dto: UserCreateDTO): UserResponseDTO {
         validateCreate(dto)
         val entity = toEntity(dto)
-        // set role
-        entity.roles.add(roleRepo.findByCodeAndDeletedFalse(client)!!)
+
+        val clientRole = roleRepo.findByCodeAndDeletedFalse(client)
+            ?: throw InvalidUserRoleException("CLIENT roli topilmadi")
+
+        entity.roles.add(clientRole)
 
         val saved = repository.saveAndRefresh(entity)
         return mapper.toDTO(saved)
@@ -77,19 +78,18 @@ class UserService(
     override fun toEntity(dto: UserCreateDTO): User = userMapper.toEntity(dto)
 
     override fun validateCreate(dto: UserCreateDTO) {
-        // telegramId unique
         userRepo.findByTelegramIdAndDeletedFalse(dto.telegramId)?.let {
-            throw UserAlreadyExistException("User with telegramId=${dto.telegramId} already exists")
+            throw UserAlreadyExistException("Telegram ID: ${dto.telegramId} allaqachon ro'yxatdan o'tgan")
         }
-        // phone unique
+
         userRepo.findByPhoneNumberAndDeletedFalse(dto.phoneNumber)?.let {
-            throw UserAlreadyExistException("User with phoneNumber=${dto.phoneNumber} already exists")
+            throw UserAlreadyExistException("Telefon raqam: ${dto.phoneNumber} allaqachon ro'yxatdan o'tgan")
         }
     }
 
     override fun validateUpdate(id: Long, dto: UserUpdateDTO) {
         getById(id)
-        dto.languageIds?.forEach { id -> getLangByIdOrThrow(id) }
+        dto.languageIds?.forEach { langId -> getLangByIdOrThrow(langId) }
     }
 
     override fun updateEntity(dto: UserUpdateDTO, entity: User) {
@@ -102,9 +102,8 @@ class UserService(
     }
 
     fun getLangByIdOrThrow(id: Long): Language =
-        langRepo.findByIdAndDeletedFalse(id) ?: throw UserNotFoundException(
-            "Language with id=$id not found"
-        )
+        langRepo.findByIdAndDeletedFalse(id)
+            ?: throw LanguageNotFoundException("Til ID: $id topilmadi")
 
     @Transactional(readOnly = true)
     fun getAllLangs(): List<Language> = langRepo.findAllByDeletedFalse()
@@ -121,4 +120,8 @@ class UserService(
     fun getEntityByTelegramId(telegramId: Long): User? {
         return userRepo.findByTelegramIdAndDeletedFalse(telegramId)
     }
+
+    override fun getEntityById(id: Long): User =
+        repository.findByIdAndDeletedFalse(id)
+            ?: throw UserNotFoundException("Foydalanuvchi ID: $id topilmadi")
 }

@@ -10,10 +10,22 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: false
   application:
     name: support-bot
 
-    client:
-      name: CLIENT
-    support:
-      name: SUPPORT
+client:
+  name: CLIENT
+
+support:
+  name: SUPPORT
+
+# JWT Configuration
+jwt:
+  secret: MyVerySecureSecretKeyForJWTTokenGenerationAndValidation2024SupportBot
+  expiration: 86400000  # 24 soat (milliseconds)
+
+# File upload configuration
+file:
+  upload-dir: uploads
+  max-size: 10MB
